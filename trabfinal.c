@@ -32,8 +32,6 @@ void files(char * fpath, int indent) {
                 strcpy(path, fpath);
                 strcat(path, "/");
                 strcat(path, entry_dir->d_name);
-                // snprintf(path, sizeof(path), "%s/%s", fpath, entry_dir->d_name);
-                // printf("%*s[%s]\n", indent, "", entry_dir->d_name);
                 printf("%*s[%s]\n", indent, "", entry_dir->d_name);
                 files(path, indent + 2);
              }
