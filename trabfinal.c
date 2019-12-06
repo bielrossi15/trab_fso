@@ -4,8 +4,16 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <string.h>
+#include <libtar.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <libtar.h>
+#include <bzlib.h>
+#include <unistd.h>
 
-char input_buffer[65536], output_buffer[65536];
+char input_buffer[PATH_MAX], output_buffer[PATH_MAX];
 
 typedef struct {
   int infd;
@@ -93,7 +101,22 @@ int main() {
 
     char path[PATH_MAX];
     scanf("%s", path);
+
     files(path, 1);
 
+    printf("%s", path);
+
+    char comand[1000];
+    strcpy(comand, "tar -cf ");
+
+    char new_path[PATH_MAX + 8];
+    strcpy(new_path, path);
+    strcat(new_path, ".bz2.tar ");
+    
+    strcat(comand, new_path);
+    strcat(comand, path);
+
+    printf("%s", comand);
+    popen(comand, "r");
     return 0;
 }
