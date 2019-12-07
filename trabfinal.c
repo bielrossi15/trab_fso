@@ -24,13 +24,21 @@ struct FILE_M {
     struct FILE_M *next;
 }; typedef struct FILE_M File_M;
 
+struct FILE_J {
+    char orig_path[PATH_MAX];
+    char dest_path[PATH_MAX];
+    struct FILE_J *next;
+}; typedef struct FILE_J File_J;
+
 struct FILES {
     int number_files_p;
     int number_files_i;
     int number_files_m;
+    int number_files_j;
     File_P *file_p;
     File_I *file_i;
     File_M *file_m;
+    File_J *file_j;
 }; typedef struct FILES Files;
 
 
@@ -92,7 +100,16 @@ void pool_of_producers(char *path, char *d_path, Files *files){
                         file_m->next = files->file_m;
                         files->file_m = file_m;
                         files->number_files_m++;
+                    } else if (f == 4){
+                        File_J *file_j = (File_J *)malloc(sizeof(File_J));
+                        strcpy(file_j->orig_path, orig_path);
+                        strcpy(file_j->dest_path, dest_path);
+                        file_j->next = files->file_j;
+                        files->file_j = file_j;
+                        files->number_files_j++;
                     }
+                    
+
                 }
             }
             free(dir_arq_name_list[n]);
@@ -162,9 +179,30 @@ void *pool_of_consumers_m(void *f){
     pthread_exit(0);
 }
 
+void *pool_of_consumers_j(void *f){
+    Files *files = (Files *)f;
+    while(files->file_j!=NULL && files->number_files_j!=0){
+        File_J *file_j;
+        file_j = files->file_j;
+
+        char command[PATH_MAX+10];
+        strcpy(command, "bzip2 -c ");
+        strcat(command, file_j->orig_path);
+        strcat(command, " > ");
+        strcat(command, file_j->dest_path);
+        popen(command, "r");
+        wait(NULL);
+
+        files->file_j = files->file_j->next; 
+        files->number_files_j--;
+    }
+    pthread_exit(0);
+}
+
+
 int main(int argc, char *argv[]){
     
-    pthread_t thread_1, thread_2, thread_3;
+    pthread_t thread_1, thread_2, thread_3, thread_4;
 
     char orig_dir[PATH_MAX], temp_dest_dir[PATH_MAX], dest_dir[PATH_MAX], *path_part;
     strcpy(orig_dir, argv[1]);
@@ -175,6 +213,7 @@ int main(int argc, char *argv[]){
     files->file_i = NULL;
     files->number_files_p = 0;
     files->number_files_i = 0;
+    files->number_files_p = 0;
 
     char *temp = strdup(orig_dir);
     strcpy(temp_dest_dir, "");
@@ -194,10 +233,12 @@ int main(int argc, char *argv[]){
     pthread_create(&thread_1, NULL, pool_of_consumers_p, files);
     pthread_create(&thread_2, NULL, pool_of_consumers_i, files);
     pthread_create(&thread_3, NULL, pool_of_consumers_m, files);
+    pthread_create(&thread_4, NULL, pool_of_consumers_j, files);
 
     pthread_join(thread_1, NULL);
     pthread_join(thread_2, NULL);
     pthread_join(thread_3, NULL);
+    pthread_join(thread_4, NULL);
 
     char command[2*PATH_MAX + 30];
     strcpy(command, "tar -cf ");
