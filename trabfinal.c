@@ -156,8 +156,8 @@ void *pool_of_consumers_p(void *f){
         strcat(command, file_p->orig_path);
         strcat(command, " > ");
         strcat(command, file_p->dest_path);
-        popen(command, "r");
-        wait(NULL);
+        FILE *p = popen(command, "r");
+        pclose(p);
 
         files->file_p = files->file_p->next; 
         files->number_files_p--;
@@ -176,8 +176,8 @@ void *pool_of_consumers_i(void *f){
         strcat(command, file_i->orig_path);
         strcat(command, " > ");
         strcat(command, file_i->dest_path);
-        popen(command, "r");
-        wait(NULL);
+        FILE *p = popen(command, "r");
+        pclose(p);
 
         files->file_i = files->file_i->next; 
         files->number_files_i--;
@@ -196,8 +196,8 @@ void *pool_of_consumers_m(void *f){
         strcat(command, file_m->orig_path);
         strcat(command, " > ");
         strcat(command, file_m->dest_path);
-        popen(command, "r");
-        wait(NULL);
+        FILE *p = popen(command, "r");
+        pclose(p);
 
         files->file_m = files->file_m->next; 
         files->number_files_m--;
@@ -216,8 +216,8 @@ void *pool_of_consumers_j(void *f){
         strcat(command, file_j->orig_path);
         strcat(command, " > ");
         strcat(command, file_j->dest_path);
-        popen(command, "r");
-        wait(NULL);
+        FILE *p = popen(command, "r");
+        pclose(p);
 
         files->file_j = files->file_j->next; 
         files->number_files_j--;
@@ -238,9 +238,12 @@ int main(int argc, char *argv[]){
     Files *files = (Files *)malloc(sizeof(Files));
     files->file_p = NULL;
     files->file_i = NULL;
+    files->file_m = NULL;
+    files->file_j = NULL;
     files->number_files_p = 0;
     files->number_files_i = 0;
-    files->number_files_p = 0;
+    files->number_files_m = 0;
+    files->number_files_j = 0;
 
     char *temp = strdup(orig_dir);
     strcpy(temp_dest_dir, "");
@@ -295,8 +298,8 @@ int main(int argc, char *argv[]){
     strcat(command, dest_dir);
     strcat(command, temp_dest_dir);
     strcat(command, " --remove-files");
-    popen(command, "r");
-    wait(NULL);
+    FILE *p = popen(command, "r");
+    pclose(p);
 
     return 0;
 }
