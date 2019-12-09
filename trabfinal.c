@@ -1,142 +1,213 @@
 #include<stdio.h>
-#include<sys/stat.h>
-#include<dirent.h>
 #include<string.h>
 #include<stdlib.h>
-#include<bzlib.h>
+#include<sys/stat.h>
+#include<dirent.h>
+#include<pthread.h>
 
 
-char input_buffer[PATH_MAX], output_buffer[PATH_MAX];
+struct FILE_P {
+    char orig_path[PATH_MAX];
+    char dest_path[PATH_MAX];
+    struct FILE_P *next;
+}; typedef struct FILE_P File_P;
 
-typedef struct {
-  int infd;
-  int outfd;
-  char filename[PATH_MAX];
-} compress;
+struct FILE_I {
+    char orig_path[PATH_MAX];
+    char dest_path[PATH_MAX];
+    struct FILE_I *next;
+}; typedef struct FILE_I File_I;
 
-void start_compression(bz_stream *bs){
-    bs->bzalloc = NULL;
-    bs->bzfree = NULL;
-    bs->opaque = NULL;
+struct FILE_M {
+    char orig_path[PATH_MAX];
+    char dest_path[PATH_MAX];
+    struct FILE_M *next;
+}; typedef struct FILE_M File_M;
 
-    BZ2_bzCompressInit(bs, 9, 0, 0);
-}
+struct FILES {
+    int number_files_p;
+    int number_files_i;
+    int number_files_m;
+    File_P *file_p;
+    File_I *file_i;
+    File_M *file_m;
+}; typedef struct FILES Files;
 
-void end_compression(bz_stream *bs){
-    BZ2_bzCompressEnd(bs);
-}
 
-void files(char *fpath, int indent) {
-    DIR *dir;
-    struct dirent *entry_dir;
-
-    dir = opendir(fpath);
-
-    if(dir == NULL) {
-        printf("Diretorio inexistente");
-        return;
-    }
-
-    if(dir) {
-        while((entry_dir = readdir(dir)) != NULL) {
-            if(entry_dir->d_type == DT_DIR) {
-                char path[PATH_MAX], dest_subdir[PATH_MAX], *path_part;
-
-                if (strcmp(entry_dir->d_name, ".") == 0 || strcmp(entry_dir->d_name, "..") == 0)
-                    continue;
-                
-                strcpy(path, fpath);
-                strcat(path, "/");
-                strcat(path, entry_dir->d_name);
-                printf("%*s[%s]\n", indent, "", entry_dir->d_name);
-
-                char *temp = strdup(path);
-                strcpy(dest_subdir, "");
-                while (path_part = strsep(&temp, "/")){
-                    strcat(dest_subdir, path_part);
-                    strcat(dest_subdir, ".bz2");
-                    strcat(dest_subdir, "/");
-                }
-
-                free(temp);
-                mkdir(dest_subdir, 0700);
-
-                files(path, indent + 2);
-            }
-            else {
-                char path[PATH_MAX], dest_subdir[PATH_MAX], *path_part;
-
-                strcpy(path, fpath);
-                strcat(path, "/");
-                strcat(path, entry_dir->d_name);           
-                printf("%*s%s\n", indent + 1, "", path);
-                
-                char *temp = strdup(path);
-                strcpy(dest_subdir, ".");
-                while (path_part = strsep(&temp, "/")){
-                    strcat(dest_subdir, "/");
-                    strcat(dest_subdir, path_part);
-                    strcat(dest_subdir, ".bz2");
-                }
-                printf("ad %s\n", dest_subdir);
-
-                FILE *input, *output;
-                input = fopen(path, "rb");
-                output = fopen(dest_subdir, "wb");
-
-                bz_stream bs;
-                start_compression(&bs);
-
-                int action = BZ_RUN;
-                int f = BZ_OK;
-
-                do {
-                    bs.avail_in = fread(input_buffer, 1, sizeof(input_buffer), input);
-                    if(feof(input) != 0){
-                        action = BZ_FINISH;
-                    }
-                    bs.next_in = input_buffer;
-                    do {
-                        bs.next_out = output_buffer;
-                        bs.avail_out = sizeof(output_buffer);
-                        f = BZ2_bzCompress(&bs, action);
-                        fwrite(output_buffer, sizeof(output_buffer) - bs.avail_out, 1, output);
-                    } while ((bs.avail_out == 0) && (f != BZ_STREAM_END));
-                } while (action != BZ_FINISH);
-
-                end_compression(&bs);
-            }
-        }
-
-        closedir(dir);
-    }
-
-}
-
-int main(int argc, char *argv[]) {
-
-    printf("Número de Argumentos: %d\n", argc);
-    printf("Origem: %s\n", argv[1]);
-    printf("Destino: %s\n", argv[2]);
-
-    char dest_dir[PATH_MAX];
-    strcpy(dest_dir, argv[1]);
-    strcat(dest_dir, ".bz2");
-    mkdir(dest_dir, 0700);
-
-    files(argv[1], 1);
-
-    // char comand[1000];
-    // strcpy(comand, "tar -cf ");
-
-    // char new_path[PATH_MAX + 8];
-    // strcpy(new_path, path);
-    // strcat(new_path, ".bz2.tar ");
+void pool_of_producers(char *path, char *d_path, Files *files){
+    struct dirent **dir_arq_name_list;
     
-    // strcat(comand, new_path);
-    // strcat(comand, path);
+    int n;
+    n = scandir(path, &dir_arq_name_list, NULL, alphasort);
+    if (n < 0)
+        perror("scandir");
+    else {
+        int f = 1;
+        while (n--) {
+            if (f==4) f=1;
+            if (strcmp(dir_arq_name_list[n]->d_name, ".")!=0 && strcmp(dir_arq_name_list[n]->d_name, "..")!=0){
+                if (dir_arq_name_list[n]->d_type == DT_DIR){
 
-    // printf("%s", comand);
-    // popen(comand, "r");
+                    char subdir_path[PATH_MAX], subdir_d_path[PATH_MAX];
+                    strcpy(subdir_path, path);
+                    strcat(subdir_path, "/");
+                    strcat(subdir_path, dir_arq_name_list[n]->d_name);
+
+                    strcpy(subdir_d_path, d_path);
+                    strcat(subdir_d_path, "/");
+                    strcat(subdir_d_path, dir_arq_name_list[n]->d_name);
+                    mkdir(subdir_d_path, 0700);
+                    
+                    pool_of_producers(subdir_path, subdir_d_path, files);
+                } else {
+                    char orig_path[PATH_MAX], dest_path[PATH_MAX];
+
+                    strcpy(orig_path, path);
+                    strcat(orig_path, "/");
+                    strcat(orig_path, dir_arq_name_list[n]->d_name);
+
+                    strcpy(dest_path, d_path);
+                    strcat(dest_path, "/");
+                    strcat(dest_path, dir_arq_name_list[n]->d_name);
+                    strcat(dest_path, ".bz2");
+
+                    if (f == 1){
+                        File_P *file_p = (File_P *)malloc(sizeof(File_P));
+                        strcpy(file_p->orig_path, orig_path);
+                        strcpy(file_p->dest_path, dest_path);
+                        file_p->next = files->file_p;
+                        files->file_p = file_p;
+                        files->number_files_p++;
+                    } else if (f == 2){
+                        File_I *file_i = (File_I *)malloc(sizeof(File_I));
+                        strcpy(file_i->orig_path, orig_path);
+                        strcpy(file_i->dest_path, dest_path);
+                        file_i->next = files->file_i;
+                        files->file_i = file_i;
+                        files->number_files_i++;
+                    } else if (f == 3){
+                        File_M *file_m = (File_M *)malloc(sizeof(File_M));
+                        strcpy(file_m->orig_path, orig_path);
+                        strcpy(file_m->dest_path, dest_path);
+                        file_m->next = files->file_m;
+                        files->file_m = file_m;
+                        files->number_files_m++;
+                    }
+                }
+            }
+            free(dir_arq_name_list[n]);
+            f++;
+        }
+        free(dir_arq_name_list);
+    }
+}
+
+void *pool_of_consumers_p(void *f){
+    Files *files = (Files *)f;
+    while(files->file_p!=NULL && files->number_files_p!=0){
+        File_P *file_p;
+        file_p = files->file_p;
+
+        char command[PATH_MAX+10];
+        strcpy(command, "bzip2 -c ");
+        strcat(command, file_p->orig_path);
+        strcat(command, " > ");
+        strcat(command, file_p->dest_path);
+        popen(command, "r");
+        wait(NULL);
+
+        files->file_p = files->file_p->next; 
+        files->number_files_p--;
+    }
+    pthread_exit(0);
+}
+
+void *pool_of_consumers_i(void *f){
+    Files *files = (Files *)f;
+    while(files->file_i!=NULL && files->number_files_i!=0){
+        File_I *file_i;
+        file_i = files->file_i;
+
+        char command[PATH_MAX+10];
+        strcpy(command, "bzip2 -c ");
+        strcat(command, file_i->orig_path);
+        strcat(command, " > ");
+        strcat(command, file_i->dest_path);
+        popen(command, "r");
+        wait(NULL);
+
+        files->file_i = files->file_i->next; 
+        files->number_files_i--;
+    }
+    pthread_exit(0);
+}
+
+void *pool_of_consumers_m(void *f){
+    Files *files = (Files *)f;
+    while(files->file_m!=NULL && files->number_files_m!=0){
+        File_M *file_m;
+        file_m = files->file_m;
+
+        char command[PATH_MAX+10];
+        strcpy(command, "bzip2 -c ");
+        strcat(command, file_m->orig_path);
+        strcat(command, " > ");
+        strcat(command, file_m->dest_path);
+        popen(command, "r");
+        wait(NULL);
+
+        files->file_m = files->file_m->next; 
+        files->number_files_m--;
+    }
+    pthread_exit(0);
+}
+
+int main(int argc, char *argv[]){
+    
+    pthread_t thread_1, thread_2, thread_3;
+
+    char orig_dir[PATH_MAX], temp_dest_dir[PATH_MAX], dest_dir[PATH_MAX], *path_part;
+    strcpy(orig_dir, argv[1]);
+    strcpy(dest_dir, argv[2]);
+
+    Files *files = (Files *)malloc(sizeof(Files));
+    files->file_p = NULL;
+    files->file_i = NULL;
+    files->number_files_p = 0;
+    files->number_files_i = 0;
+
+    char *temp = strdup(orig_dir);
+    strcpy(temp_dest_dir, "");
+    while (path_part = strsep(&temp, "/")){
+        if (strcmp(path_part, ".")==0){
+            strcat(temp_dest_dir, "./");
+        } else if (strcmp(path_part, "")!=0){
+            strcat(temp_dest_dir, path_part);
+            strcat(temp_dest_dir, ".bz2");
+            strcat(temp_dest_dir, "/");
+        }
+    }
+    mkdir(temp_dest_dir, 0700);
+
+    pool_of_producers(orig_dir, temp_dest_dir, files);
+
+    pthread_create(&thread_1, NULL, pool_of_consumers_p, files);
+    pthread_create(&thread_2, NULL, pool_of_consumers_i, files);
+    pthread_create(&thread_3, NULL, pool_of_consumers_m, files);
+
+    pthread_join(thread_1, NULL);
+    pthread_join(thread_2, NULL);
+    pthread_join(thread_3, NULL);
+
+    char command[2*PATH_MAX + 30];
+    strcpy(command, "tar -cf ");
+    
+    strcat(dest_dir, " ");
+    strcat(command, dest_dir);
+    strcat(command, temp_dest_dir);
+    strcat(command, " --remove-files");
+    popen(command, "r");
+    wait(NULL);
+
     return 0;
 }
