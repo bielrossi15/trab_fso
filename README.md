@@ -13,5 +13,5 @@ Fundamento de Sistemas Operacionais FSO 2/2019
  
 2. Execute o programa
 ```
-./a.out <arquivo de entrada> <arquivo de saída>
+./a.out <diretorio de entrada> <arquivo de saída>
 ```
